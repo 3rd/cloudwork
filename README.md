@@ -4,6 +4,10 @@ Cloudwork is a bare-bones automation tool for quickly spawning machines in the c
 
 ## Installation
 
+Requirements:
+
+- `rsync`
+
 ```bash
 go install github.com/3rd/cloudwork@latest
 ```

@@ -11,13 +11,13 @@ import (
 
 func Upload(host, localPath, remotePath string) error {
 	fmt.Printf("Uploading %s to %s:%s\n", localPath, host, remotePath)
-	cmd := exec.Command("scp", "-r", localPath, host+":"+remotePath)
+	cmd := exec.Command("rsync", "-r", "--mkpath", localPath, host+":"+remotePath)
 	return runCommand(cmd)
 }
 
 func Download(host, remotePath, localPath string) error {
 	fmt.Printf("Downloading %s:%s to %s\n", host, remotePath, localPath)
-	cmd := exec.Command("scp", "-r", host+":"+remotePath, localPath)
+	cmd := exec.Command("rsync", "-r", "--mkpath", host+":"+remotePath, localPath)
 	return runCommand(cmd)
 }
 
