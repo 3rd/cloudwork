@@ -30,9 +30,6 @@ func main() {
 
 	cfg := config.Load(*configPath)
 
-	// log host
-	fmt.Printf("Running on host: %s\n", *host)
-
 	switch flag.Arg(0) {
 	case "bootstrap":
 		bootstrap(cfg)
@@ -94,6 +91,25 @@ func run(cfg config.Config, host string) {
 		wg.Add(1)
 		go func(worker config.Worker) {
 			defer wg.Done()
+
+			inputDir := filepath.Join("workers", worker.Host, "input/") + "/"
+			if _, err := os.Stat(inputDir); err == nil {
+				if err := ssh.Upload(worker.Host, inputDir, "/tmp/worker/input"); err != nil {
+					log.Fatalf("Failed to upload inputs to worker %s: %v", worker.Host, err)
+				}
+			} else {
+				fmt.Printf("No inputs to upload to worker %s\n", worker.Host)
+			}
+
+			defer func() {
+				outputDir := filepath.Join("workers", worker.Host, "output/")
+				if _, err := os.Stat(outputDir); err == nil {
+					if err := ssh.Download(worker.Host, "/tmp/worker/output/", outputDir); err != nil {
+						log.Fatalf("Failed to download outputs from worker %s: %v", worker.Host, err)
+					}
+				}
+			}()
+
 			fmt.Printf("Running script on worker: %s\n", worker.Host)
 			if err := ssh.Run(worker.Host, cfg.Run); err != nil {
 				log.Fatalf("Run failed on worker %s: %v", worker.Host, err)
