@@ -32,10 +32,10 @@ func Load(configPath string) Config {
 
 	// Set default values for remote dirs if they are not set in the config file
 	if config.RemoteInputDir == "" {
-		config.RemoteInputDir = "/tmp/worker/input"
+		config.RemoteInputDir = "/tmp/worker/input/"
 	}
 	if config.RemoteOutputDir == "" {
-		config.RemoteOutputDir = "/tmp/worker/output"
+		config.RemoteOutputDir = "/tmp/worker/output/"
 	}
 
 	return config
