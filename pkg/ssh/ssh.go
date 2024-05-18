@@ -105,14 +105,13 @@ func waitCommand(cmd *exec.Cmd, host string) error {
 	}
 
 	var wg sync.WaitGroup
-	ch := make(chan string)
+	ch := make(chan string, 100)
 
 	stdoutScanner := bufio.NewScanner(stdout)
 	wg.Add(1)
 	go func() {
 		for stdoutScanner.Scan() {
-			text := fmt.Sprintf("[%s] %s", host, strings.TrimSpace(stdoutScanner.Text()))
-			ch <- text
+			ch <- strings.TrimSpace(stdoutScanner.Text())
 		}
 		wg.Done()
 	}()
@@ -122,7 +121,7 @@ func waitCommand(cmd *exec.Cmd, host string) error {
 	go func() {
 		for stderrScanner.Scan() {
 			text := fmt.Sprintf("[%s] %s", host, strings.TrimSpace(stderrScanner.Text()))
-			ch <- text
+			ch <- strings.TrimSpace(text)
 		}
 		wg.Done()
 	}()
@@ -133,7 +132,8 @@ func waitCommand(cmd *exec.Cmd, host string) error {
 	}()
 
 	for text := range ch {
-		log.Printf("%s", text)
+		formatted := fmt.Sprintf("[%s] %s", host, strings.TrimSpace(text))
+		log.Printf("%s", formatted)
 	}
 
 	return cmd.Wait()
