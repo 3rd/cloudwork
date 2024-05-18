@@ -41,6 +41,9 @@ workers:
     - host: worker2
     - host: worker3
 
+remoteInputDir: /tmp/worker/input
+remoteOutputDir: /tmp/worker/output
+
 setup: |
     # This runs when you do `cloudwork setup` if the worker wasn't already setup or if the script changed.
     apt update -y && apt upgrade -y
@@ -79,9 +82,6 @@ workers:
     - host: worker1
     - host: worker2
     - host: worker3
-
-remoteInputDir: /tmp/worker/input
-remoteOutputDir: /tmp/worker/output
 
 setup: |
     apt update -y && apt upgrade -y
