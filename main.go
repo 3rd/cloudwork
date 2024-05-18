@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sync"
 
 	"github.com/3rd/cloudwork/pkg/config"
 	"github.com/3rd/cloudwork/pkg/ssh"
 )
+
+var interrupted bool
 
 func main() {
 	configPath := flag.String("config", "cloudwork.yml", "Path to the cloudwork configuration file")
@@ -29,6 +32,18 @@ func main() {
 	}
 
 	cfg := config.Load(*configPath)
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt)
+	go func() {
+		<-sigCh
+		fmt.Println("\nReceived interrupt signal. Terminating SSH processes...")
+		interrupted = true
+		ssh.TerminateAll()
+		<-sigCh
+		fmt.Println("Received second interrupt signal. Exiting the application...")
+		os.Exit(1)
+	}()
 
 	switch flag.Arg(0) {
 	case "bootstrap":
@@ -102,6 +117,9 @@ func run(cfg config.Config, host string) {
 			}
 
 			defer func() {
+				if interrupted {
+					return
+				}
 				outputDir := filepath.Join("workers", worker.Host, "output/")
 				if _, err := os.Stat(outputDir); err == nil {
 					if err := ssh.Download(worker.Host, cfg.RemoteOutputDir, outputDir); err != nil {
@@ -112,9 +130,15 @@ func run(cfg config.Config, host string) {
 
 			log.Printf("Running script on worker: %s", worker.Host)
 			if err := ssh.Run(worker.Host, cfg.Run); err != nil {
-				log.Fatalf("Run failed on worker %s: %v", worker.Host, err)
+				if interrupted {
+					log.Printf("Worker %s interrupted", worker.Host)
+				} else {
+					log.Fatalf("Run failed on worker %s: %v", worker.Host, err)
+				}
 			}
-			log.Printf("Run complete on worker: %s", worker.Host)
+			if !interrupted {
+				log.Printf("Run complete on worker: %s", worker.Host)
+			}
 		}(worker)
 	}
 	wg.Wait()

@@ -10,16 +10,29 @@ import (
 	"sync"
 )
 
+var processes sync.Map
+
+func TerminateAll() {
+	processes.Range(func(key, value interface{}) bool {
+		host := key.(string)
+		process := value.(*os.Process)
+		if err := process.Signal(os.Interrupt); err != nil {
+			log.Printf("Failed to send interrupt signal to process on host %s: %v", host, err)
+		}
+		return true
+	})
+}
+
 func Upload(host, localPath, remotePath string) error {
 	log.Printf("Uploading %s to %s:%s", localPath, host, remotePath)
 	cmd := exec.Command("rsync", "-r", "--mkpath", localPath, host+":"+remotePath)
-	return runCommand(cmd, "local")
+	return waitCommand(cmd, "local")
 }
 
 func Download(host, remotePath, localPath string) error {
 	log.Printf("Downloading %s:%s to %s", host, remotePath, localPath)
 	cmd := exec.Command("rsync", "-r", "--mkpath", host+":"+remotePath, localPath)
-	return runCommand(cmd, "local")
+	return waitCommand(cmd, "local")
 }
 
 func Run(host, script string) error {
@@ -71,12 +84,13 @@ func Run(host, script string) error {
 		return err
 	}
 
-	cmd := exec.Command("ssh", host, "-t", "bash --login -c 'sh /tmp/cloudwork-exec.sh'")
+	cmd := exec.Command("ssh", host, "bash --login -c 'sh /tmp/cloudwork-exec.sh'")
 	cmd.Stdin = os.NewFile(0, os.DevNull)
-	return runCommand(cmd, host)
+
+	return waitCommand(cmd, host)
 }
 
-func runCommand(cmd *exec.Cmd, host string) error {
+func waitCommand(cmd *exec.Cmd, host string) error {
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
@@ -91,13 +105,13 @@ func runCommand(cmd *exec.Cmd, host string) error {
 	}
 
 	var wg sync.WaitGroup
-	ch := make(chan string, 10)
+	ch := make(chan string)
 
 	stdoutScanner := bufio.NewScanner(stdout)
 	wg.Add(1)
 	go func() {
 		for stdoutScanner.Scan() {
-			text := fmt.Sprintf("[%s] %s", host, stdoutScanner.Text())
+			text := fmt.Sprintf("[%s] %s", host, strings.TrimSpace(stdoutScanner.Text()))
 			ch <- text
 		}
 		wg.Done()
@@ -107,7 +121,7 @@ func runCommand(cmd *exec.Cmd, host string) error {
 	wg.Add(1)
 	go func() {
 		for stderrScanner.Scan() {
-			text := fmt.Sprintf("[%s] %s", host, stderrScanner.Text())
+			text := fmt.Sprintf("[%s] %s", host, strings.TrimSpace(stderrScanner.Text()))
 			ch <- text
 		}
 		wg.Done()
