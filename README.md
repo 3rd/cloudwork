@@ -2,6 +2,8 @@
 
 Cloudwork is a bare-bones automation tool for quickly spawning machines in the cloud and distributing workloads across them.
 
+https://github.com/3rd/cloudwork/assets/59587503/391373cd-7b69-4b21-85c9-2a8d35cd3e3f
+
 ## Installation
 
 Requirements:
