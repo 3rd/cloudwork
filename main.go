@@ -71,15 +71,15 @@ func setup(cfg config.Config, host string) {
 		wg.Add(1)
 		go func(worker config.Worker) {
 			defer wg.Done()
-			fmt.Printf("Running setup on worker: %s\n", worker.Host)
+			log.Printf("Running setup on worker: %s", worker.Host)
 			if err := ssh.Run(worker.Host, cfg.Setup); err != nil {
 				log.Fatalf("Setup failed on worker %s: %v", worker.Host, err)
 			}
-			fmt.Printf("Setup complete on worker: %s\n", worker.Host)
+			log.Printf("Setup complete on worker: %s", worker.Host)
 		}(worker)
 	}
 	wg.Wait()
-	fmt.Println("Setup complete on all workers.")
+	log.Println("Setup complete on all workers.")
 }
 
 func run(cfg config.Config, host string) {
@@ -94,27 +94,27 @@ func run(cfg config.Config, host string) {
 
 			inputDir := filepath.Join("workers", worker.Host, "input/") + "/"
 			if _, err := os.Stat(inputDir); err == nil {
-				if err := ssh.Upload(worker.Host, inputDir, "/tmp/worker/input"); err != nil {
+				if err := ssh.Upload(worker.Host, inputDir, cfg.RemoteInputDir); err != nil {
 					log.Fatalf("Failed to upload inputs to worker %s: %v", worker.Host, err)
 				}
 			} else {
-				fmt.Printf("No inputs to upload to worker %s\n", worker.Host)
+				log.Printf("No inputs to upload to worker %s", worker.Host)
 			}
 
 			defer func() {
 				outputDir := filepath.Join("workers", worker.Host, "output/")
 				if _, err := os.Stat(outputDir); err == nil {
-					if err := ssh.Download(worker.Host, "/tmp/worker/output/", outputDir); err != nil {
+					if err := ssh.Download(worker.Host, cfg.RemoteOutputDir, outputDir); err != nil {
 						log.Fatalf("Failed to download outputs from worker %s: %v", worker.Host, err)
 					}
 				}
 			}()
 
-			fmt.Printf("Running script on worker: %s\n", worker.Host)
+			log.Printf("Running script on worker: %s", worker.Host)
 			if err := ssh.Run(worker.Host, cfg.Run); err != nil {
 				log.Fatalf("Run failed on worker %s: %v", worker.Host, err)
 			}
-			fmt.Printf("Run complete on worker: %s\n", worker.Host)
+			log.Printf("Run complete on worker: %s", worker.Host)
 		}(worker)
 	}
 	wg.Wait()

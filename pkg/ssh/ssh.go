@@ -1,32 +1,28 @@
 package ssh
 
 import (
+	"bufio"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 )
 
 func Upload(host, localPath, remotePath string) error {
-	fmt.Printf("Uploading %s to %s:%s\n", localPath, host, remotePath)
+	log.Printf("Uploading %s to %s:%s", localPath, host, remotePath)
 	cmd := exec.Command("rsync", "-r", "--mkpath", localPath, host+":"+remotePath)
-	return runCommand(cmd)
+	return runCommand(cmd, "local")
 }
 
 func Download(host, remotePath, localPath string) error {
-	fmt.Printf("Downloading %s:%s to %s\n", host, remotePath, localPath)
+	log.Printf("Downloading %s:%s to %s", host, remotePath, localPath)
 	cmd := exec.Command("rsync", "-r", "--mkpath", host+":"+remotePath, localPath)
-	return runCommand(cmd)
+	return runCommand(cmd, "local")
 }
 
 func Run(host, script string) error {
-	tmpFile, err := os.CreateTemp("", "cloudwork_*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmpFile.Name())
 
 	// handle special commands
 	processedScript := ""
@@ -60,6 +56,11 @@ func Run(host, script string) error {
 		}
 	}
 
+	tmpFile, err := os.CreateTemp("", "cloudwork_*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmpFile.Name())
 	_, err = tmpFile.WriteString(processedScript)
 	if err != nil {
 		return err
@@ -72,10 +73,10 @@ func Run(host, script string) error {
 
 	cmd := exec.Command("ssh", host, "-t", "bash --login -c 'sh /tmp/cloudwork-exec.sh'")
 	cmd.Stdin = os.NewFile(0, os.DevNull)
-	return runCommand(cmd)
+	return runCommand(cmd, host)
 }
 
-func runCommand(cmd *exec.Cmd) error {
+func runCommand(cmd *exec.Cmd, host string) error {
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
@@ -84,16 +85,41 @@ func runCommand(cmd *exec.Cmd) error {
 	if err != nil {
 		return err
 	}
-	go func() {
-		io.Copy(os.Stdout, stdout)
-		stdout.Close()
-	}()
-	go func() {
-		io.Copy(os.Stderr, stderr)
-		stderr.Close()
-	}()
+
 	if err := cmd.Start(); err != nil {
 		return err
+	}
+
+	var wg sync.WaitGroup
+	ch := make(chan string, 10)
+
+	stdoutScanner := bufio.NewScanner(stdout)
+	wg.Add(1)
+	go func() {
+		for stdoutScanner.Scan() {
+			text := fmt.Sprintf("[%s] %s", host, stdoutScanner.Text())
+			ch <- text
+		}
+		wg.Done()
+	}()
+
+	stderrScanner := bufio.NewScanner(stderr)
+	wg.Add(1)
+	go func() {
+		for stderrScanner.Scan() {
+			text := fmt.Sprintf("[%s] %s", host, stderrScanner.Text())
+			ch <- text
+		}
+		wg.Done()
+	}()
+
+	go func() {
+		wg.Wait()
+		close(ch)
+	}()
+
+	for text := range ch {
+		log.Printf("%s", text)
 	}
 
 	return cmd.Wait()

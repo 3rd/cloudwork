@@ -29,9 +29,9 @@ You'll need to create a `cloudwork.yml` configuration and a directory structure 
 ```
 Workers are controlled over SSH, make `ssh workerX` work before you start.
 \
-Whatever is in the `$worker/input` directory will be uploaded to the worker at `/tmp/worker/input`.
+Whatever is in the `$worker/input` directory will be uploaded to the worker at `config.remoteInputDir` (def. `/tmp/worker/input`).
 \
-Whatever the worker writes to `/tmp/worker/output` will be downloaded to the local `$worker/output` directory.
+Whatever the worker writes to `config.remoteOutputDir` (def. `/tmp/worker/output`) will be downloaded to the local `$worker/output` directory.
 \
 The configuration file is a YAML file that looks like this:
 
@@ -79,6 +79,9 @@ workers:
     - host: worker1
     - host: worker2
     - host: worker3
+
+remoteInputDir: /tmp/worker/input
+remoteOutputDir: /tmp/worker/output
 
 setup: |
     apt update -y && apt upgrade -y
