@@ -15,8 +15,8 @@ type Config struct {
 	Workers         []Worker `yaml:"workers"`
 	Setup           string   `yaml:"setup"`
 	Run             string   `yaml:"run"`
-	RemoteInputDir  string   `yaml:"inputDir"`
-	RemoteOutputDir string   `yaml:"outputDir"`
+	RemoteInputDir  string   `yaml:"remoteInputDir"`
+	RemoteOutputDir string   `yaml:"remoteOutputDir"`
 }
 
 func Load(configPath string) Config {
