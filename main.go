@@ -26,6 +26,8 @@ func main() {
 		fmt.Println("  bootstrap  Creates the input/output directory structure for the configured workers")
 		fmt.Println("  setup      Runs the setup script on each worker")
 		fmt.Println("  run        Uploads inputs, executes the run script on all workers, and downloads outputs")
+		fmt.Println("  download   Downloads outputs from all workers")
+		fmt.Println("  upload     Uploads inputs to all workers")
 		fmt.Println("Options:")
 		flag.PrintDefaults()
 		os.Exit(1)
@@ -52,6 +54,10 @@ func main() {
 		setup(cfg, *host)
 	case "run":
 		run(cfg, *host)
+	case "download":
+		download(cfg, *host)
+	case "upload":
+		upload(cfg, *host)
 	default:
 		log.Fatalf("Unknown command: %s", flag.Arg(0))
 	}
@@ -143,4 +149,48 @@ func run(cfg config.Config, host string) {
 	}
 	wg.Wait()
 	fmt.Println("Run complete on all workers.")
+}
+
+func download(cfg config.Config, host string) {
+	var wg sync.WaitGroup
+	for _, worker := range cfg.Workers {
+		if host != "" && worker.Host != host {
+			continue
+		}
+		wg.Add(1)
+		go func(worker config.Worker) {
+			defer wg.Done()
+
+			outputDir := filepath.Join("workers", worker.Host, "output/")
+			if _, err := os.Stat(outputDir); err == nil {
+				if err := ssh.Download(worker.Host, cfg.RemoteOutputDir, outputDir); err != nil {
+					log.Fatalf("Failed to download outputs from worker %s: %v", worker.Host, err)
+				}
+			}
+		}(worker)
+	}
+	wg.Wait()
+	log.Println("Download complete on all workers.")
+}
+
+func upload(cfg config.Config, host string) {
+	var wg sync.WaitGroup
+	for _, worker := range cfg.Workers {
+		if host != "" && worker.Host != host {
+			continue
+		}
+		wg.Add(1)
+		go func(worker config.Worker) {
+			defer wg.Done()
+
+			inputDir := filepath.Join("workers", worker.Host, "input/") + "/"
+			if _, err := os.Stat(inputDir); err == nil {
+				if err := ssh.Upload(worker.Host, inputDir, cfg.RemoteInputDir); err != nil {
+					log.Fatalf("Failed to upload inputs to worker %s: %v", worker.Host, err)
+				}
+			}
+		}(worker)
+	}
+	wg.Wait()
+	log.Println("Upload complete on all workers.")
 }
