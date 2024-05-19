@@ -138,8 +138,7 @@ func waitCommand(cmd *exec.Cmd, host string) error {
 	wg.Add(1)
 	go func() {
 		for stdoutScanner.Scan() {
-			text := fmt.Sprintf("[%s] %s", host, strings.TrimSpace(stdoutScanner.Text()))
-			ch <- strings.TrimSpace(text)
+			ch <- strings.TrimSpace(stdoutScanner.Text())
 		}
 		wg.Done()
 	}()
@@ -148,8 +147,7 @@ func waitCommand(cmd *exec.Cmd, host string) error {
 	wg.Add(1)
 	go func() {
 		for stderrScanner.Scan() {
-			text := fmt.Sprintf("[%s] %s", host, strings.TrimSpace(stderrScanner.Text()))
-			ch <- strings.TrimSpace(text)
+			ch <- strings.TrimSpace(stderrScanner.Text())
 		}
 		wg.Done()
 	}()
