@@ -23,11 +23,11 @@ func main() {
 	if flag.NArg() < 1 {
 		fmt.Println("Usage: cloudwork [options] <command>")
 		fmt.Println("Commands:")
-		fmt.Println("  bootstrap  Creates the input/output directory structure for the configured workers")
-		fmt.Println("  setup      Runs the setup script on each worker")
-		fmt.Println("  run        Uploads inputs, executes the run script on all workers, and downloads outputs")
-		fmt.Println("  download   Downloads outputs from all workers")
-		fmt.Println("  upload     Uploads inputs to all workers")
+		fmt.Println("  bootstrap                 Creates the input/output directory structure for the configured workers")
+		fmt.Println("  setup                     Runs the setup script on each worker")
+		fmt.Println("  run                       Uploads inputs, executes the run script on all workers, and downloads outputs")
+		fmt.Println("  download <remote path>    Downloads outputs from all workers (download-output <remote path>)")
+		fmt.Println("  upload <remote path>      Uploads inputs to all workers (upload-input <remote path>)")
 		fmt.Println("Options:")
 		flag.PrintDefaults()
 		os.Exit(1)
@@ -55,9 +55,15 @@ func main() {
 	case "run":
 		run(cfg, *host)
 	case "download":
-		download(cfg, *host)
+		if flag.NArg() < 2 {
+			log.Fatal("Missing remote source path for download-output")
+		}
+		download(cfg, *host, flag.Arg(1))
 	case "upload":
-		upload(cfg, *host)
+		if flag.NArg() < 2 {
+			log.Fatal("Missing remote destination path for upload-input")
+		}
+		upload(cfg, *host, flag.Arg(1))
 	default:
 		log.Fatalf("Unknown command: %s", flag.Arg(0))
 	}
@@ -83,7 +89,7 @@ func bootstrap(cfg config.Config) {
 	fmt.Println("Bootstrap complete.")
 }
 
-func setup(cfg config.Config, host string) {
+func runScript(cfg config.Config, host string, script string, silent bool) {
 	var wg sync.WaitGroup
 	for _, worker := range cfg.Workers {
 		if host != "" && worker.Host != host {
@@ -92,105 +98,41 @@ func setup(cfg config.Config, host string) {
 		wg.Add(1)
 		go func(worker config.Worker) {
 			defer wg.Done()
-			log.Printf("Running setup on worker: %s", worker.Host)
-			if err := ssh.Run(worker.Host, cfg.Setup); err != nil {
-				log.Fatalf("Setup failed on worker %s: %v", worker.Host, err)
+
+			if !silent {
+				log.Printf("Running script on worker: %s", worker.Host)
 			}
-			log.Printf("Setup complete on worker: %s", worker.Host)
+			if err := ssh.Run(worker.Host, script); err != nil {
+				if interrupted {
+					log.Printf("Worker %s interrupted", worker.Host)
+				} else {
+					log.Fatalf("Failed on worker %s: %v", worker.Host, err)
+				}
+			}
+			if !silent && !interrupted {
+				log.Printf("Script completed on worker: %s", worker.Host)
+			}
 		}(worker)
 	}
 	wg.Wait()
+}
+
+func setup(cfg config.Config, host string) {
+	runScript(cfg, host, cfg.Setup, false)
 	log.Println("Setup complete on all workers.")
 }
 
 func run(cfg config.Config, host string) {
-	var wg sync.WaitGroup
-	for _, worker := range cfg.Workers {
-		if host != "" && worker.Host != host {
-			continue
-		}
-		wg.Add(1)
-		go func(worker config.Worker) {
-			defer wg.Done()
-
-			inputDir := filepath.Join("workers", worker.Host, "input/") + "/"
-			if _, err := os.Stat(inputDir); err == nil {
-				if err := ssh.Upload(worker.Host, inputDir, cfg.RemoteInputDir); err != nil {
-					log.Fatalf("Failed to upload inputs to worker %s: %v", worker.Host, err)
-				}
-			} else {
-				log.Printf("No inputs to upload to worker %s", worker.Host)
-			}
-
-			defer func() {
-				if interrupted {
-					return
-				}
-				outputDir := filepath.Join("workers", worker.Host, "output/")
-				if _, err := os.Stat(outputDir); err == nil {
-					if err := ssh.Download(worker.Host, cfg.RemoteOutputDir, outputDir); err != nil {
-						log.Fatalf("Failed to download outputs from worker %s: %v", worker.Host, err)
-					}
-				}
-			}()
-
-			log.Printf("Running script on worker: %s", worker.Host)
-			if err := ssh.Run(worker.Host, cfg.Run); err != nil {
-				if interrupted {
-					log.Printf("Worker %s interrupted", worker.Host)
-				} else {
-					log.Fatalf("Run failed on worker %s: %v", worker.Host, err)
-				}
-			}
-			if !interrupted {
-				log.Printf("Run complete on worker: %s", worker.Host)
-			}
-		}(worker)
-	}
-	wg.Wait()
+	runScript(cfg, host, cfg.Run, false)
 	fmt.Println("Run complete on all workers.")
 }
 
-func download(cfg config.Config, host string) {
-	var wg sync.WaitGroup
-	for _, worker := range cfg.Workers {
-		if host != "" && worker.Host != host {
-			continue
-		}
-		wg.Add(1)
-		go func(worker config.Worker) {
-			defer wg.Done()
-
-			outputDir := filepath.Join("workers", worker.Host, "output/")
-			if _, err := os.Stat(outputDir); err == nil {
-				if err := ssh.Download(worker.Host, cfg.RemoteOutputDir, outputDir); err != nil {
-					log.Fatalf("Failed to download outputs from worker %s: %v", worker.Host, err)
-				}
-			}
-		}(worker)
-	}
-	wg.Wait()
+func download(cfg config.Config, host, remoteSrc string) {
+	runScript(cfg, host, fmt.Sprintf("download-output %s", remoteSrc), true)
 	log.Println("Download complete on all workers.")
 }
 
-func upload(cfg config.Config, host string) {
-	var wg sync.WaitGroup
-	for _, worker := range cfg.Workers {
-		if host != "" && worker.Host != host {
-			continue
-		}
-		wg.Add(1)
-		go func(worker config.Worker) {
-			defer wg.Done()
-
-			inputDir := filepath.Join("workers", worker.Host, "input/") + "/"
-			if _, err := os.Stat(inputDir); err == nil {
-				if err := ssh.Upload(worker.Host, inputDir, cfg.RemoteInputDir); err != nil {
-					log.Fatalf("Failed to upload inputs to worker %s: %v", worker.Host, err)
-				}
-			}
-		}(worker)
-	}
-	wg.Wait()
+func upload(cfg config.Config, host, remoteDest string) {
+	runScript(cfg, host, fmt.Sprintf("upload-input %s", remoteDest), true)
 	log.Println("Upload complete on all workers.")
 }

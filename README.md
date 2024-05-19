@@ -8,6 +8,7 @@ https://github.com/3rd/cloudwork/assets/59587503/391373cd-7b69-4b21-85c9-2a8d35c
 
 Requirements:
 
+- `ssh`
 - `rsync`
 
 ```bash
@@ -16,24 +17,7 @@ go install github.com/3rd/cloudwork@latest
 
 ## Setup
 
-You'll need to create a `cloudwork.yml` configuration and a directory structure like this:
-
-```
-|-- workers/
-|   |-- worker1/
-|   |   |-- input/*
-|   |   |-- output/*
-|   |-- worker2/
-|   |   |-- input/*
-|   |   |-- output/*
-|   ...
-|-- cloudwork.yml
-```
-Workers are controlled over SSH, make `ssh workerX` work before you start.
-\
-Whatever is in the `$worker/input` directory will be uploaded to the worker at `config.remoteInputDir` (def. `/tmp/worker/input`).
-\
-Whatever the worker writes to `config.remoteOutputDir` (def. `/tmp/worker/output`) will be downloaded to the local `$worker/output` directory.
+First, you'll need to create a `cloudwork.yml` configuration file.
 \
 The configuration file is a YAML file that looks like this:
 
@@ -42,9 +26,6 @@ workers:
     - host: worker1
     - host: worker2
     - host: worker3
-
-remoteInputDir: /tmp/worker/input
-remoteOutputDir: /tmp/worker/output
 
 setup: |
     # This runs when you do `cloudwork setup` if the worker wasn't already setup or if the script changed.
@@ -58,22 +39,47 @@ setup: |
 
 run: |
     # This runs on each worker when you do `cloudwork run`.
+    upload-input /tmp/worker/input/
     docker build -t work /app
     docker run -v /tmp/worker/input:/input -v /tmp/worker/output:/output -it work
-    
+    download-output /tmp/worker/output/
 ```
 
-There are a few special commands that you can use in the `setup` and `run` scripts:
+Use `cloudwork bootstrap` to create the input/output directory structure for the configured workers.
+\
+After running this command, you will have a "workers" directory with the following structure:
 
-- `upload <local path> <remote path>` - Uploads things to the remote machine, all uploads are done before the script is executed.
-- `download <remote path> <local path>` - Downloads things from the remote machine, all downloads are done after the script is executed.
+```
+|-- workers/
+|   |-- worker1/
+|   |   |-- input/*
+|   |   |-- output/*
+|   |-- worker2/
+|   |   |-- input/*
+|   |   |-- output/*
+|   ...
+|-- cloudwork.yml
+```
+In the example configuration, `setup` and `run` are scripts that will run on workers.
+\
+There are a few special commands that you can use in scripts:
+
+- `upload-input <remote path>` - Uploads `./workers/<worker/input/*` to the worker at `<remote path>`.
+- `download-output <remote path>` - Downloads `<remote path>` to `./workers/<worker/output/`.
+- `upload <local path> <remote path>` - Uploads localhost:`<local path>` to remote: `<remote path>`.
+- `download <remote path> <local path>` - Downloads remote: `<remote path>` to localhost:`<local path>`.
+
+> [!TIP]
+> The paths used in the upload/download commens are pass as-they-are to `rsync`, remember to add a trailing slash if you want to upload/download the contents of a directory.
 
 ## Usage
 
 - `cloudwork bootstrap` - Creates the input/output directory structure for the configured workers.
 - `cloudwork setup` - Runs the `setup` script on each worker.
 - `cloudwork run` - Uploads inputs, executes the `run` script on all workers, and downloads outputs.
-- `couldwork -host <host> <command>` - idem, but only for the specified host.
+- `cloudwork upload-input` - Uploads inputs to all workers.
+- `cloudwork download-output` - Downloads outputs from all workers.
+- `couldwork -host <host> <command>` - idem, but only for the specified `<host>`.
 
 ## Examples
 

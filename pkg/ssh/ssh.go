@@ -25,13 +25,13 @@ func TerminateAll() {
 
 func Upload(host, localPath, remotePath string) error {
 	log.Printf("Uploading %s to %s:%s", localPath, host, remotePath)
-	cmd := exec.Command("rsync", "-r", "--mkpath", localPath, host+":"+remotePath)
+	cmd := exec.Command("rsync", "-r", localPath, host+":"+remotePath)
 	return waitCommand(cmd, "local")
 }
 
 func Download(host, remotePath, localPath string) error {
 	log.Printf("Downloading %s:%s to %s", host, remotePath, localPath)
-	cmd := exec.Command("rsync", "-r", "--mkpath", host+":"+remotePath, localPath)
+	cmd := exec.Command("rsync", "-r", host+":"+remotePath, localPath)
 	return waitCommand(cmd, "local")
 }
 
@@ -41,8 +41,8 @@ func Run(host, script string) error {
 	processedScript := ""
 	for _, line := range strings.Split(script, "\n") {
 
+		// upload <local path> <remote path>
 		if strings.HasPrefix(line, "upload ") {
-			// upload
 			parts := strings.Split(strings.TrimPrefix(line, "upload "), " ")
 			if len(parts) == 2 {
 				localPath := strings.TrimSpace(parts[0])
@@ -52,7 +52,7 @@ func Run(host, script string) error {
 				}
 			}
 		} else if strings.HasPrefix(line, "download ") {
-			// deferred download
+			// download <remote path> <local path> (deferred)
 			downloadLine := line
 			defer func() {
 				parts := strings.Split(strings.TrimPrefix(downloadLine, "download "), " ")
@@ -62,6 +62,23 @@ func Run(host, script string) error {
 					if err := Download(host, remotePath, localPath); err != nil {
 						log.Printf("Failed to download %s to %s: %v", remotePath, localPath, err)
 					}
+				}
+			}()
+		} else if strings.HasPrefix(line, "upload-input") {
+			// upload-input <remote path>
+			remotePath := strings.TrimSpace(strings.TrimPrefix(line, "upload-input "))
+			localPath := fmt.Sprintf("./workers/%s/input/*", host)
+			if err := Upload(host, localPath, remotePath); err != nil {
+				return err
+			}
+		} else if strings.HasPrefix(line, "download-output") {
+			// download-output <remote path> (deferred)
+			downloadLine := line
+			defer func() {
+				remotePath := strings.TrimSpace(strings.TrimPrefix(downloadLine, "download-output "))
+				localPath := fmt.Sprintf("./workers/%s/output/", host)
+				if err := Download(host, remotePath, localPath); err != nil {
+					log.Printf("Failed to download %s to %s: %v", remotePath, localPath, err)
 				}
 			}()
 		} else {
