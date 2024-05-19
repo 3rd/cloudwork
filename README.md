@@ -69,6 +69,10 @@ There are a few special commands that you can use in scripts:
 - `upload <local path> <remote path>` - Uploads localhost:`<local path>` to remote: `<remote path>`.
 - `download <remote path> <local path>` - Downloads remote: `<remote path>` to localhost:`<local path>`.
 
+> [!WARNING]  
+> Upload and download operations are extracted from the script and don't run when you'd expect.
+> Uploads are done before the script is run, and downloads are done after the script is run.
+
 > [!TIP]
 > The paths used in the upload/download commens are pass as-they-are to `rsync`, remember to add a trailing slash if you want to upload/download the contents of a directory.
 
