@@ -102,7 +102,7 @@ func runScript(cfg config.Config, host string, script string, silent bool) {
 			if !silent {
 				log.Printf("Running script on worker: %s", worker.Host)
 			}
-			if err := ssh.Run(worker.Host, script); err != nil {
+			if err := ssh.Run(worker.Host, script, silent); err != nil {
 				if interrupted {
 					log.Printf("Worker %s interrupted", worker.Host)
 				} else {

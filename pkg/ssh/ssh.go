@@ -23,19 +23,29 @@ func TerminateAll() {
 	})
 }
 
-func Upload(host, localPath, remotePath string) error {
-	log.Printf("Uploading %s to %s:%s", localPath, host, remotePath)
+func Upload(host, localPath, remotePath string, silent bool) error {
+	if !silent {
+		log.Printf("Uploading %s to %s:%s", localPath, host, remotePath)
+	}
 	cmd := exec.Command("rsync", "-r", localPath, host+":"+remotePath)
-	return waitCommand(cmd, "local")
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	return cmd.Wait()
+	// return waitCommand(cmd, "")
 }
 
-func Download(host, remotePath, localPath string) error {
+func Download(host, remotePath, localPath string, silent bool) error {
 	log.Printf("Downloading %s:%s to %s", host, remotePath, localPath)
 	cmd := exec.Command("rsync", "-r", host+":"+remotePath, localPath)
-	return waitCommand(cmd, "local")
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	return cmd.Wait()
+	// return waitCommand(cmd, "")
 }
 
-func Run(host, script string) error {
+func Run(host, script string, silent bool) error {
 
 	// handle special commands
 	processedScript := ""
@@ -47,7 +57,7 @@ func Run(host, script string) error {
 			if len(parts) == 2 {
 				localPath := strings.TrimSpace(parts[0])
 				remotePath := strings.TrimSpace(parts[1])
-				if err := Upload(host, localPath, remotePath); err != nil {
+				if err := Upload(host, localPath, remotePath, silent); err != nil {
 					return err
 				}
 			}
@@ -59,7 +69,7 @@ func Run(host, script string) error {
 				if len(parts) == 2 {
 					remotePath := strings.TrimSpace(parts[0])
 					localPath := strings.TrimSpace(parts[1])
-					if err := Download(host, remotePath, localPath); err != nil {
+					if err := Download(host, remotePath, localPath, silent); err != nil {
 						log.Printf("Failed to download %s to %s: %v", remotePath, localPath, err)
 					}
 				}
@@ -67,8 +77,8 @@ func Run(host, script string) error {
 		} else if strings.HasPrefix(line, "upload-input") {
 			// upload-input <remote path>
 			remotePath := strings.TrimSpace(strings.TrimPrefix(line, "upload-input "))
-			localPath := fmt.Sprintf("./workers/%s/input/*", host)
-			if err := Upload(host, localPath, remotePath); err != nil {
+			localPath := fmt.Sprintf("./workers/%s/input/", host)
+			if err := Upload(host, localPath, remotePath, silent); err != nil {
 				return err
 			}
 		} else if strings.HasPrefix(line, "download-output") {
@@ -77,7 +87,7 @@ func Run(host, script string) error {
 			defer func() {
 				remotePath := strings.TrimSpace(strings.TrimPrefix(downloadLine, "download-output "))
 				localPath := fmt.Sprintf("./workers/%s/output/", host)
-				if err := Download(host, remotePath, localPath); err != nil {
+				if err := Download(host, remotePath, localPath, silent); err != nil {
 					log.Printf("Failed to download %s to %s: %v", remotePath, localPath, err)
 				}
 			}()
@@ -96,7 +106,7 @@ func Run(host, script string) error {
 		return err
 	}
 
-	err = Upload(host, tmpFile.Name(), "/tmp/cloudwork-exec.sh")
+	err = Upload(host, tmpFile.Name(), "/tmp/cloudwork-exec.sh", silent)
 	if err != nil {
 		return err
 	}
@@ -128,7 +138,8 @@ func waitCommand(cmd *exec.Cmd, host string) error {
 	wg.Add(1)
 	go func() {
 		for stdoutScanner.Scan() {
-			ch <- strings.TrimSpace(stdoutScanner.Text())
+			text := fmt.Sprintf("[%s] %s", host, strings.TrimSpace(stdoutScanner.Text()))
+			ch <- strings.TrimSpace(text)
 		}
 		wg.Done()
 	}()
@@ -149,8 +160,13 @@ func waitCommand(cmd *exec.Cmd, host string) error {
 	}()
 
 	for text := range ch {
-		formatted := fmt.Sprintf("[%s] %s", host, strings.TrimSpace(text))
-		log.Printf("%s", formatted)
+		formatted := strings.TrimSpace(text)
+		if host != "" {
+			formatted = fmt.Sprintf("[%s] %s", host, strings.TrimSpace(text))
+		}
+		if formatted != "" {
+			log.Printf("%s", formatted)
+		}
 	}
 
 	return cmd.Wait()
