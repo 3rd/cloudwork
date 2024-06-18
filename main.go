@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/3rd/cloudwork/pkg/config"
@@ -23,11 +25,8 @@ func main() {
 	if flag.NArg() < 1 {
 		fmt.Println("Usage: cloudwork [options] <command>")
 		fmt.Println("Commands:")
-		fmt.Println("  bootstrap                 Creates the input/output directory structure for the configured workers")
-		fmt.Println("  setup                     Runs the setup script on each worker")
-		fmt.Println("  run                       Uploads inputs, executes the run script on all workers, and downloads outputs")
-		fmt.Println("  download <remote path>    Downloads outputs from all workers (download-output <remote path>)")
-		fmt.Println("  upload <remote path>      Uploads inputs to all workers (upload-input <remote path>)")
+		fmt.Println("  bootstrap                Creates the input/output directory structure for the configured workers")
+		fmt.Println("  run <script name|file>   Runs the specified script on all workers")
 		fmt.Println("Options:")
 		flag.PrintDefaults()
 		os.Exit(1)
@@ -50,20 +49,40 @@ func main() {
 	switch flag.Arg(0) {
 	case "bootstrap":
 		bootstrap(cfg)
-	case "setup":
-		setup(cfg, *host)
 	case "run":
-		run(cfg, *host)
-	case "download":
-		if flag.NArg() < 2 {
-			log.Fatal("Missing remote source path for download-output")
+		script := "default"
+		if flag.NArg() > 1 {
+			script = flag.Arg(1)
 		}
-		download(cfg, *host, flag.Arg(1))
-	case "upload":
-		if flag.NArg() < 2 {
-			log.Fatal("Missing remote destination path for upload-input")
+		if strings.HasPrefix(script, "./") || strings.HasPrefix(script, "/") {
+			if _, err := os.Stat(script); err == nil {
+				b, err := os.ReadFile(script)
+				if err != nil {
+					log.Fatalf("Failed to read script file: %v", err)
+				}
+				script = string(b)
+				fmt.Printf("The script file '%s' will be executed on all workers. Are you sure you want to continue? (y/N): ", flag.Arg(1))
+				reader := bufio.NewReader(os.Stdin)
+				confirm, _ := reader.ReadString('\n')
+				if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(confirm)), "y") {
+					fmt.Println("Aborted.")
+					os.Exit(0)
+				}
+			} else {
+				log.Fatalf("Script file not found: %s", flag.Arg(1))
+			}
+		} else if scriptContent, ok := cfg.Scripts[script]; ok {
+			script = scriptContent
+		} else {
+			log.Fatalf("Unknown script: %s", script)
 		}
-		upload(cfg, *host, flag.Arg(1))
+		run(cfg, *host, script)
+	case "exec":
+		if flag.NArg() < 2 {
+			log.Fatal("Missing script argument for 'exec' command")
+		}
+		script := strings.Join(flag.Args()[1:], " ")
+		run(cfg, *host, script)
 	default:
 		log.Fatalf("Unknown command: %s", flag.Arg(0))
 	}
@@ -117,22 +136,7 @@ func runScript(cfg config.Config, host string, script string, silent bool) {
 	wg.Wait()
 }
 
-func setup(cfg config.Config, host string) {
-	runScript(cfg, host, cfg.Setup, false)
-	log.Println("Setup complete on all workers.")
-}
-
-func run(cfg config.Config, host string) {
-	runScript(cfg, host, cfg.Run, false)
+func run(cfg config.Config, host, script string) {
+	runScript(cfg, host, script, false)
 	fmt.Println("Run complete on all workers.")
-}
-
-func download(cfg config.Config, host, remoteSrc string) {
-	runScript(cfg, host, fmt.Sprintf("download-output %s", remoteSrc), true)
-	log.Println("Download complete on all workers.")
-}
-
-func upload(cfg config.Config, host, remoteDest string) {
-	runScript(cfg, host, fmt.Sprintf("upload-input %s", remoteDest), true)
-	log.Println("Upload complete on all workers.")
 }

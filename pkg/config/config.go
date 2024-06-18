@@ -12,9 +12,8 @@ type Worker struct {
 }
 
 type Config struct {
-	Workers []Worker `yaml:"workers"`
-	Setup   string   `yaml:"setup"`
-	Run     string   `yaml:"run"`
+	Workers []Worker          `yaml:"workers"`
+	Scripts map[string]string `yaml:"scripts"`
 }
 
 func Load(configPath string) Config {

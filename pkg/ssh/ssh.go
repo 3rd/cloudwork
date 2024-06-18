@@ -74,14 +74,14 @@ func Run(host, script string, silent bool) error {
 					}
 				}
 			}()
-		} else if strings.HasPrefix(line, "upload-input") {
+		} else if strings.HasPrefix(line, "upload-input ") {
 			// upload-input <remote path>
 			remotePath := strings.TrimSpace(strings.TrimPrefix(line, "upload-input "))
 			localPath := fmt.Sprintf("./workers/%s/input/", host)
 			if err := Upload(host, localPath, remotePath, silent); err != nil {
 				return err
 			}
-		} else if strings.HasPrefix(line, "download-output") {
+		} else if strings.HasPrefix(line, "download-output ") {
 			// download-output <remote path> (deferred)
 			downloadLine := line
 			defer func() {

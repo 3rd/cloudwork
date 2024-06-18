@@ -26,11 +26,12 @@ The configuration file is a YAML file that looks like this:
 
 ```yaml
 workers:
-    - host: worker1
-    - host: worker2
-    - host: worker3
+  - host: worker1
+  - host: worker2
+  - host: worker3
 
-setup: |
+scripts:
+  setup: |
     # This runs when you do `cloudwork setup` if the worker wasn't already setup or if the script changed.
     apt update -y && apt upgrade -y
     apt install -y apt-transport-https ca-certificates curl software-properties-common gcc clang make build-essential libssl-dev libffi-dev libpcap-dev
@@ -40,7 +41,7 @@ setup: |
     mkdir /app
     upload Dockerfile /app
 
-run: |
+  default: |
     # This runs on each worker when you do `cloudwork run`.
     upload-input /tmp/worker/input/
     docker build -t work /app
@@ -63,6 +64,7 @@ After running this command, you will have a "workers" directory with the followi
 |   ...
 |-- cloudwork.yml
 ```
+
 In the example configuration, `setup` and `run` are scripts that will run on workers.
 \
 There are a few special commands that you can use in scripts:
@@ -72,7 +74,7 @@ There are a few special commands that you can use in scripts:
 - `upload <local path> <remote path>` - Uploads localhost:`<local path>` to remote: `<remote path>`.
 - `download <remote path> <local path>` - Downloads remote: `<remote path>` to localhost:`<local path>`.
 
-> [!WARNING]  
+> [!WARNING]
 > Upload and download operations are extracted from the script and don't run when you'd expect.
 > Uploads are done before the script is run, and downloads are done after the script is run.
 
@@ -82,10 +84,9 @@ There are a few special commands that you can use in scripts:
 ## Usage
 
 - `cloudwork bootstrap` - Creates the input/output directory structure for the configured workers.
-- `cloudwork setup` - Runs the `setup` script on each worker.
-- `cloudwork run` - Uploads inputs, executes the `run` script on all workers, and downloads outputs.
-- `cloudwork upload-input` - Uploads inputs to all workers.
-- `cloudwork download-output` - Downloads outputs from all workers.
+- `cloudwork run [script-name]` - Runs the specified script on all workers. If no script name is provided, it runs the "default" script.
+- `cloudwork run ./script.sh` - Runs a script (file) on all workers.
+- `cloudwork exec "command"` - Executes a command on all workers.
 - `couldwork -host <host> <command>` - idem, but only for the specified `<host>`.
 
 ## Examples
@@ -94,11 +95,12 @@ There are a few special commands that you can use in scripts:
 
 ```yaml
 workers:
-    - host: worker1
-    - host: worker2
-    - host: worker3
+  - host: worker1
+  - host: worker2
+  - host: worker3
 
-setup: |
+scripts:
+  setup: |
     apt update -y && apt upgrade -y
     apt install -y apt-transport-https ca-certificates curl software-properties-common gcc clang make build-essential libssl-dev libffi-dev libpcap-dev
     apt install -y golang-go
@@ -122,7 +124,7 @@ setup: |
     upload sample-wordlist.txt /worker
     upload sample-resolvers.txt /worker
 
-run: |
+  default: |
     puredns bruteforce \
         /worker/sample-wordlist.txt \
         -t 100 -rate-limit 500 \
@@ -131,4 +133,3 @@ run: |
         -w /tmp/worker/output/results.txt \
         --write-wildcards /tmp/worker/output/wildcards.txt
 ```
-
