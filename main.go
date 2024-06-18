@@ -125,7 +125,7 @@ func runScript(cfg config.Config, host string, script string, silent bool) {
 				if interrupted {
 					log.Printf("Worker %s interrupted", worker.Host)
 				} else {
-					log.Fatalf("Failed on worker %s: %v", worker.Host, err)
+					log.Printf("Failed on worker %s: %v", worker.Host, err)
 				}
 			}
 			if !silent && !interrupted {
